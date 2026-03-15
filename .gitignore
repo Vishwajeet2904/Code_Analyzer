@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# IDE files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Backend specific test outputs
+Backend/test-*.json
+Backend/test-scan2.js
+Backend/test-scan.js
