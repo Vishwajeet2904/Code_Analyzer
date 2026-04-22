@@ -27,3 +27,5 @@ Thumbs.db
 Backend/test-*.json
 Backend/test-scan2.js
 Backend/test-scan.js
+
+README.md

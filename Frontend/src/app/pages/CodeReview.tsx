@@ -81,6 +81,8 @@ export function CodeReview() {
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [isDiffMode, setIsDiffMode] = useState(false);
   const [baseCode, setBaseCode] = useState(SAMPLE_CODE);
+  const [autoFixSetting, setAutoFixSetting] = useState(false);
+  const [prCommentPosted, setPrCommentPosted] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumRef = useRef<HTMLDivElement>(null);
@@ -191,6 +193,20 @@ export function CodeReview() {
     }
   };
 
+  useEffect(() => {
+    const token = localStorage.getItem("codeguardian_token") || "";
+    if (token) {
+      fetch('http://localhost:5000/api/settings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.autoFix !== undefined) setAutoFixSetting(data.autoFix);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -240,6 +256,7 @@ export function CodeReview() {
     setOriginalCode(code); // save original before any fixes
     setBaseCode(code);
     setIsDiffMode(false);
+    setPrCommentPosted(false);
     try {
       const token = localStorage.getItem("codeguardian_token") || "";
       const resp = await fetch("http://localhost:5000/api/review/analyze", {
@@ -268,10 +285,15 @@ export function CodeReview() {
           issues: sanitizedIssues,
         };
         setScanResult(sanitizedResult);
+        setPrCommentPosted(!!data.prCommentPosted);
         setIssues(sanitizedIssues);
         setSelectedIssue(sanitizedIssues[0] || null);
         if (sanitizedIssues[0]) handleGetFix(sanitizedIssues[0]);
         setAnalyzed(true);
+
+        if (autoFixSetting && sanitizedIssues.length > 0) {
+          setTimeout(() => handleFixAll(sanitizedIssues), 500);
+        }
       }
     } catch {
       setErrorMsg("Cannot connect to backend. Make sure server is running on port 5000.");
@@ -304,8 +326,9 @@ export function CodeReview() {
     }
   };
 
-  const handleFixAll = async () => {
-    if (!issues.length) return;
+  const handleFixAll = async (issuesList?: any[]) => {
+    const targetIssues = issuesList || issues;
+    if (!targetIssues.length) return;
     setIsFixingAll(true);
     setFixAllSummary([]);
     try {
@@ -313,7 +336,7 @@ export function CodeReview() {
       const resp = await fetch("http://localhost:5000/api/review/fix-all", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code: originalCode, issues, language: selectedLang }),
+        body: JSON.stringify({ code: originalCode, issues: targetIssues, language: selectedLang }),
       });
       const data = await resp.json();
       const fixed = safeStr(data.fixedCode || "");
@@ -503,6 +526,12 @@ export function CodeReview() {
                 {highCount > 0 && <span style={{ fontSize: "12px", color: "#f97316" }}>· {highCount} High</span>}
                 {mediumCount > 0 && <span style={{ fontSize: "12px", color: "#f59e0b" }}>· {mediumCount} Medium</span>}
                 {lowCount > 0 && <span style={{ fontSize: "12px", color: "#22c55e" }}>· {lowCount} Low</span>}
+                {prCommentPosted && (
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold animate-pulse"
+                    style={{ background: "rgba(34,211,238,0.15)", color: "#22d3ee", border: "1px solid rgba(34,211,238,0.3)" }}>
+                    <Github size={10} /> PR BOT COMMENT POSTED
+                  </span>
+                )}
                 <span style={{ fontSize: "12px", color: "#4b5563", marginLeft: "auto" }}>{safeStr(scanResult.summary)}</span>
               </>
             ) : (
@@ -550,7 +579,7 @@ export function CodeReview() {
           {analyzed && issues.length > 0 && (
             <>
               <button
-                onClick={handleFixAll}
+                onClick={() => handleFixAll()}
                 disabled={isFixingAll || appliedFixes.size === issues.length}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
                 style={{

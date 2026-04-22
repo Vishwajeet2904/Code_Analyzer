@@ -92,12 +92,66 @@ export function Settings() {
       .then(res => res.json())
       .then(data => {
         if (data.customRules) setRules(data.customRules);
+        if (data.theme) toggleDarkMode(data.theme === "dark");
+        if (data.notifications !== undefined) setEmailAlerts(data.notifications);
+        if (data.autoFix !== undefined) setAutoFix(data.autoFix);
+        if (data.prComments !== undefined) setPrComments(data.prComments);
       })
       .catch(() => {});
   }, []);
 
-  const toggleRule = (id: number) => {
-    setRules((prev) => prev.map((r) => r.id === id ? { ...r, active: !r.active } : r));
+  const saveSettings = async (updates: any) => {
+    const token = localStorage.getItem("codeguardian_token") || "";
+    try {
+      await fetch('http://localhost:5000/api/settings', {
+        method: "PUT",
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
+      });
+    } catch (e) {
+      console.error("Failed to save settings", e);
+    }
+  };
+
+  const toggleRule = async (id: number) => {
+    const updatedRules = rules.map((r) => r.id === id ? { ...r, active: !r.active } : r);
+    setRules(updatedRules);
+
+    const token = localStorage.getItem("codeguardian_token") || "";
+    try {
+      await fetch('http://localhost:5000/api/settings/rules', {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ customRules: updatedRules })
+      });
+    } catch (e) {
+      console.error("Failed to save rules to backend", e);
+    }
+  };
+
+  const deleteRule = async (id: number) => {
+    const updatedRules = rules.filter((r) => r.id !== id);
+    setRules(updatedRules);
+
+    const token = localStorage.getItem("codeguardian_token") || "";
+    try {
+      await fetch('http://localhost:5000/api/settings/rules', {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ customRules: updatedRules })
+      });
+    } catch (e) {
+      console.error("Failed to save rules to backend", e);
+    }
   };
 
   const addRule = async () => {
@@ -326,7 +380,7 @@ export function Settings() {
                   {severity}
                 </span>
                 <button
-                  onClick={() => setRules((prev) => prev.filter((r) => r.id !== id))}
+                  onClick={() => deleteRule(id)}
                   className="text-gray-600 hover:text-red-400 transition-colors"
                 >
                   <Trash2 size={14} />
@@ -398,7 +452,19 @@ export function Settings() {
                   <div style={{ fontSize: "12px", color: "#6b7280" }}>{desc}</div>
                 </div>
                 <button
-                  onClick={() => set(!val)}
+                  onClick={() => {
+                    const newVal = !val;
+                    set(newVal);
+                    const keyMap: any = {
+                      "Dark Mode": "theme",
+                      "Email Alerts": "notifications",
+                      "Auto-Apply AI Fixes": "autoFix",
+                      "PR Bot Comments": "prComments"
+                    };
+                    if (keyMap[label]) {
+                      saveSettings({ [keyMap[label]]: label === "Dark Mode" ? (newVal ? "dark" : "light") : newVal });
+                    }
+                  }}
                   className="relative w-10 h-5 rounded-full transition-all"
                   style={{
                     background: val

@@ -130,16 +130,22 @@ function reindentCode(code, targetIndent) {
   }).join("\n");
 }
 
-async function analyzeCode(code, language) {
+async function analyzeCode(code, language, customRules = []) {
+  const activeRules = customRules.filter(r => r.active).map(r => `- ${r.name} (Severity: ${r.severity})`).join('\n');
+  
+  const rulesPrompt = activeRules ? `\n\nCUSTOM USER RULES (Apply these in addition to standard rules):\n${activeRules}` : '';
+
   const content = await groqComplete([
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: SYSTEM_PROMPT + rulesPrompt },
     { role: "user", content: `Language: ${language}\n\nCode:\n${code}` },
   ]);
   return sanitizeResult(JSON.parse(content));
 }
 
-async function getFixSuggestion(code, issue, language) {
+async function getFixSuggestion(code, issue, language, customRules = []) {
   const indent = detectIndentation(code);
+  const activeRules = customRules.filter(r => r.active).map(r => r.name).join(', ');
+  const rulesSuffix = activeRules ? ` and respecting these custom rules: ${activeRules}` : '';
 
   // Step 1: get metadata as JSON (no code inside)
   const metaContent = await groqComplete([
@@ -166,7 +172,7 @@ Return JSON:
   const codeContent = await groqComplete([
     {
       role: "system",
-      content: `You are an expert ${language} security engineer. Return ONLY the fixed source code — no explanations, no markdown, no code fences, no JSON. Just the raw code.`,
+      content: `You are an expert ${language} security engineer. Return ONLY the fixed source code — no explanations, no markdown, no code fences, no JSON. Just the raw code. Ensure the code is clean, production-ready${rulesSuffix}.`,
     },
     {
       role: "user",
@@ -210,8 +216,10 @@ Rules:
   };
 }
 
-async function fixAllIssues(code, issues, language) {
+async function fixAllIssues(code, issues, language, customRules = []) {
   const indent = detectIndentation(code);
+  const activeRules = customRules.filter(r => r.active).map(r => r.name).join(', ');
+  const rulesSuffix = activeRules ? ` and sticking to these custom rules: ${activeRules}` : '';
   const issueList = issues.map((iss, i) =>
     `${i + 1}. [${iss.severity?.toUpperCase()}] ${iss.title} (Line ${iss.line}): ${iss.description}`
   ).join("\n");
@@ -220,7 +228,7 @@ async function fixAllIssues(code, issues, language) {
   const fixedCode = await groqComplete([
     {
       role: "system",
-      content: `You are an expert ${language} security engineer. Your job is to return a FULLY FIXED, production-ready version of the code.
+      content: `You are an expert ${language} security engineer. Your job is to return a FULLY FIXED, production-ready version of the code${rulesSuffix}.
 You MUST fix every single issue listed — no exceptions. Every hardcoded secret, every buffer overflow, every memory leak, every unsafe pattern MUST be fixed.
 Return ONLY raw source code. No markdown, no code fences, no explanations, no JSON. Just the fixed code.`,
     },

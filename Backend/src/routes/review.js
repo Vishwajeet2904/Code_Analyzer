@@ -3,7 +3,8 @@ const { v4: uuidv4 } = require("uuid");
 const authMiddleware = require("../middleware/auth");
 const { analyzeCode, getFixSuggestion, fixAllIssues } = require("../services/aiService");
 const { sendCriticalAlertEmail } = require("../services/emailService");
-const { scans, users } = require("../store");
+const { postPRComment } = require("../services/githubService");
+const { scans, users, settings } = require("../store");
 
 const router = express.Router();
 
@@ -15,7 +16,9 @@ router.post("/analyze", authMiddleware, async (req, res) => {
   if (code.length > 10000) return res.status(400).json({ error: "Code too long (max 10,000 chars)" });
 
   try {
-    const result = await analyzeCode(code, language);
+    const userSettings = settings[req.user.id] || {};
+    const customRules = userSettings.customRules || [];
+    const result = await analyzeCode(code, language, customRules);
 
     // Save scan to history
     const scan = {
@@ -45,7 +48,13 @@ router.post("/analyze", authMiddleware, async (req, res) => {
       }
     }
 
-    res.json({ scanId: scan.id, ...result });
+    // Post PR comment if setting is on
+    let prCommentPosted = false;
+    if (userSettings.prComments && result.issues.length > 0) {
+      prCommentPosted = await postPRComment(repo, result.issues);
+    }
+
+    res.json({ scanId: scan.id, prCommentPosted, ...result });
   } catch (err) {
     console.error("AI analysis error:", err.message);
     res.status(500).json({ error: "AI analysis failed: " + err.message });
@@ -59,7 +68,9 @@ router.post("/fix", authMiddleware, async (req, res) => {
   if (!code || !issue || !language) return res.status(400).json({ error: "code, issue, and language are required" });
 
   try {
-    const fix = await getFixSuggestion(code, issue, language);
+    const userSettings = settings[req.user.id] || {};
+    const customRules = userSettings.customRules || [];
+    const fix = await getFixSuggestion(code, issue, language, customRules);
     res.json(fix);
   } catch (err) {
     console.error("Fix suggestion error:", err.message);
@@ -74,7 +85,9 @@ router.post("/fix-all", authMiddleware, async (req, res) => {
   if (!Array.isArray(issues) || issues.length === 0) return res.status(400).json({ error: "issues must be a non-empty array" });
 
   try {
-    const result = await fixAllIssues(code, issues, language);
+    const userSettings = settings[req.user.id] || {};
+    const customRules = userSettings.customRules || [];
+    const result = await fixAllIssues(code, issues, language, customRules);
     res.json(result);
   } catch (err) {
     console.error("Fix all error:", err.message);
