@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Shield, Github, Chrome, Mail, Lock, Eye, EyeOff, ArrowLeft, Zap } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, ArrowLeft, Zap } from "lucide-react";
 import { API_BASE as API } from "../lib/api";
 
 export function Login() {
@@ -221,33 +221,9 @@ export function Login() {
             </form>
           ) : (
             <>
-              {/* Social auth — Demo mode */}
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center gap-2 mb-1">
-                  <span style={{ fontSize: "11px", color: "#4b5563" }}>Quick access</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.25)", fontSize: "10px", fontWeight: 700 }}>DEMO</span>
-                </div>
-                <button
-                  onClick={() => handleOAuth("GitHub")}
-                  className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm transition-all hover:bg-white/10"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#e5e7eb", fontWeight: 500 }}
-                >
-                  <Github size={18} />
-                  Demo Login via GitHub
-                </button>
-                <button
-                  onClick={() => handleOAuth("Google")}
-                  className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm transition-all hover:bg-white/10"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#e5e7eb", fontWeight: 500 }}
-                >
-                  <Chrome size={18} />
-                  Demo Login via Google
-                </button>
-              </div>
-
               <div className="flex items-center gap-3 mb-6">
                 <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-                <span style={{ fontSize: "12px", color: "#4b5563" }}>or</span>
+                <span style={{ fontSize: "12px", color: "#4b5563" }}>sign in with email</span>
                 <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
               </div>
 
