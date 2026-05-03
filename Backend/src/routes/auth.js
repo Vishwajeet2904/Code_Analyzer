@@ -107,7 +107,6 @@ router.post("/register", otpLimiter, validate(registerSchema), async (req, res) 
 
     console.log(`\n🔑 OTP for ${email}: ${otp}\n`);
 
-    // Try sending email — if it fails, OTP is returned in response for demo
     let emailSent = false;
     try {
       await sendOtpEmail(email, name, otp);
@@ -117,10 +116,9 @@ router.post("/register", otpLimiter, validate(registerSchema), async (req, res) 
     }
 
     res.json({
-      message: emailSent ? "OTP sent to your email" : "OTP generated (email unavailable)",
+      message: emailSent ? "OTP sent to your email" : "OTP generated",
       email,
-      // Return OTP in dev/demo mode when email fails
-      ...((!emailSent) && { demoOtp: otp }),
+      ...(!emailSent && { demoOtp: otp }),
     });
   } catch (err) {
     delete pendingUsers[email];

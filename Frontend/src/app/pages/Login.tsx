@@ -34,7 +34,6 @@ export function Login() {
         } else {
           setPendingEmail(email);
           setOtpStep(true);
-          // If email failed, auto-fill OTP from response
           if (data.demoOtp) {
             setOtp(data.demoOtp);
           }

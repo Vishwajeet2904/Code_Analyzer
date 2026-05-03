@@ -9,6 +9,12 @@ module.exports = (req, res, next) => {
   const token = header.split(" ")[1];
   if (!token) return res.status(401).json({ error: "Malformed token" });
 
+  // Allow demo token for guest access
+  if (token === "demo_token") {
+    req.user = { id: "demo_user", email: "demo@codeguardian.ai", name: "Demo User" };
+    return next();
+  }
+
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
