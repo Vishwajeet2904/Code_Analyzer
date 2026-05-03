@@ -27,6 +27,7 @@ import {
   Sparkles,
   FileCode,
 } from "lucide-react";
+import { API_BASE } from "../lib/api";
 
 const qualityTrendData = [
   { month: "Sep", score: 62, security: 45 },
@@ -86,7 +87,7 @@ export function Dashboard() {
 
   const fetchDashboard = () => {
     const token = localStorage.getItem("codeguardian_token") || "";
-    fetch('http://localhost:5000/api/dashboard', {
+    fetch(`${API_BASE}/api/dashboard`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())

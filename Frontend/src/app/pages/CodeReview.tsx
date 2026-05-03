@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Zap, Upload, ChevronDown, AlertTriangle, Wind, CheckCircle, Sparkles, X, Shield, ArrowRight, RotateCcw, FileCode, Github, Folder, FileText, Keyboard, Award } from "lucide-react";
 import Editor, { DiffEditor, useMonaco } from "@monaco-editor/react";
+import { API_BASE } from "../lib/api";
 
 // ── Animated counter hook ─────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 800) {
@@ -239,7 +240,7 @@ export function CodeReview() {
   useEffect(() => {
     const token = localStorage.getItem("codeguardian_token") || "";
     if (token) {
-      fetch('http://localhost:5000/api/settings', {
+      fetch('${API_BASE}/api/settings', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -327,7 +328,7 @@ export function CodeReview() {
     setPrCommentPosted(false);
     try {
       const token = localStorage.getItem("codeguardian_token") || "";
-      const resp = await fetch("http://localhost:5000/api/review/analyze", {
+      const resp = await fetch("${API_BASE}/api/review/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code, language: selectedLang, repo: repoName, branch: "main" }),
@@ -376,7 +377,7 @@ export function CodeReview() {
     const codeToFix = originalCode && originalCode.trim().length > 0 ? originalCode : code;
     try {
       const token = localStorage.getItem("codeguardian_token") || "";
-      const resp = await fetch("http://localhost:5000/api/review/fix", {
+      const resp = await fetch("${API_BASE}/api/review/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: codeToFix, issue, language: selectedLang }),
@@ -403,7 +404,7 @@ export function CodeReview() {
     setFixAllSummary([]);
     try {
       const token = localStorage.getItem("codeguardian_token") || "";
-      const resp = await fetch("http://localhost:5000/api/review/fix-all", {
+      const resp = await fetch("${API_BASE}/api/review/fix-all", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: originalCode, issues: targetIssues, language: selectedLang }),
@@ -450,7 +451,7 @@ export function CodeReview() {
     setAskAiLoading(true);
     try {
       const token = localStorage.getItem("codeguardian_token") || "";
-      const resp = await fetch("http://localhost:5000/api/review/fix", {
+      const resp = await fetch("${API_BASE}/api/review/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({

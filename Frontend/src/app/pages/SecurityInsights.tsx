@@ -6,8 +6,7 @@ import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar,
 } from "recharts";
 import { Shield, TrendingDown, FileText, DatabaseZap, Zap } from "lucide-react";
-
-const API = "http://localhost:5000";
+import { API_BASE as API } from "../lib/api";
 const weeks = ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"];
 
 function getHeatColor(val: number) {

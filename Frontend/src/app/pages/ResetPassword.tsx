@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
-
-const API = "http://localhost:5000";
+import { API_BASE as API } from "../lib/api";
 
 export function ResetPassword() {
   const navigate = useNavigate();

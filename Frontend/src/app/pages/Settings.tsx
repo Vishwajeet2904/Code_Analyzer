@@ -18,6 +18,7 @@ import {
   Trash2,
   ChevronRight,
 } from "lucide-react";
+import { API_BASE } from "../lib/api";
 
 const customRules = [
   { id: 1, name: "No console.log in production", severity: "MEDIUM", active: true },
@@ -99,7 +100,7 @@ export function Settings() {
   const token = localStorage.getItem("codeguardian_token") || "";
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/settings', {
+    fetch('${API_BASE}/api/settings', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -116,7 +117,7 @@ export function Settings() {
   const saveSettings = async (updates: any) => {
     const token = localStorage.getItem("codeguardian_token") || "";
     try {
-      await fetch('http://localhost:5000/api/settings', {
+      await fetch('${API_BASE}/api/settings', {
         method: "PUT",
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +136,7 @@ export function Settings() {
 
     const token = localStorage.getItem("codeguardian_token") || "";
     try {
-      await fetch('http://localhost:5000/api/settings/rules', {
+      await fetch('${API_BASE}/api/settings/rules', {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +155,7 @@ export function Settings() {
 
     const token = localStorage.getItem("codeguardian_token") || "";
     try {
-      await fetch('http://localhost:5000/api/settings/rules', {
+      await fetch('${API_BASE}/api/settings/rules', {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +177,7 @@ export function Settings() {
 
     const token = localStorage.getItem("codeguardian_token") || "";
     try {
-      await fetch('http://localhost:5000/api/settings/rules', {
+      await fetch('${API_BASE}/api/settings/rules', {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +215,7 @@ export function Settings() {
       if (editNewPass) { body.currentPassword = editCurrentPass; body.newPassword = editNewPass; }
       if (!Object.keys(body).length) { setEditMsg({ type: "error", text: "No changes made" }); setEditLoading(false); return; }
 
-      const res = await fetch("http://localhost:5000/api/settings/profile", {
+      const res = await fetch("${API_BASE}/api/settings/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify(body),

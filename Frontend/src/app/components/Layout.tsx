@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 
 const navItems = [
   { to: "/app", icon: LayoutDashboard, label: "Dashboard", end: true },
@@ -42,7 +43,7 @@ export function AppLayout() {
   const handleLogout = async () => {
     try {
       const token = localStorage.getItem("codeguardian_token");
-      await fetch("http://localhost:5000/api/auth/logout", {
+      await fetch(`${API_BASE}/api/auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         credentials: "include",

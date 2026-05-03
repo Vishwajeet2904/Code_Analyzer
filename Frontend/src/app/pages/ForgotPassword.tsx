@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Shield, Mail, ArrowLeft, CheckCircle } from "lucide-react";
-
-const API = "http://localhost:5000";
+import { API_BASE as API } from "../lib/api";
 
 export function ForgotPassword() {
   const navigate = useNavigate();

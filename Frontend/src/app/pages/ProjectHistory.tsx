@@ -22,7 +22,7 @@ import {
   Code2,
 } from "lucide-react";
 
-const API = "http://localhost:5000";
+import { API_BASE as API } from "../lib/api";
 
 const statusConfig = {
   pass: { color: "#22c55e", bg: "rgba(34,197,94,0.1)", icon: CheckCircle, label: "Passed" },

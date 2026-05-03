@@ -5,7 +5,9 @@
  * - Redirects to /login on auth failure
  */
 
-export const API_BASE = "http://localhost:5000";
+// In production: VITE_API_URL env var set on Vercel
+// In development: falls back to localhost:5000
+export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 let isRefreshing = false;
 let refreshQueue: Array<(token: string) => void> = [];
