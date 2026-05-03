@@ -219,7 +219,17 @@ export function Landing() {
                 Start Review — It's Free
               </button>
               <button
-                onClick={() => navigate("/app")}
+                onClick={() => {
+                  // Set demo user so Layout doesn't redirect to login
+                  localStorage.setItem("codeguardian_token", "demo_token");
+                  localStorage.setItem("codeguardian_user", JSON.stringify({
+                    name: "Demo User",
+                    email: "demo@codeguardian.ai",
+                    avatar: "DU",
+                    plan: "Free",
+                  }));
+                  navigate("/app");
+                }}
                 className="flex items-center gap-2 px-8 py-4 rounded-xl transition-all hover:bg-white/10"
                 style={{
                   border: "1px solid rgba(255,255,255,0.15)",

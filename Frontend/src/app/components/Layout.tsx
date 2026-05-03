@@ -35,17 +35,12 @@ export function AppLayout() {
   const token = localStorage.getItem("codeguardian_token");
 
   useEffect(() => {
-    // If no token, set a demo guest token so user can explore
+    // If no token at all, redirect to login
+    // demo_token is set by "Try Demo" button — allow access
     if (!token) {
-      localStorage.setItem("codeguardian_user", JSON.stringify({
-        name: "Demo User",
-        email: "demo@codeguardian.ai",
-        avatar: "DU",
-        plan: "Free",
-      }));
-      // Don't redirect — allow demo browsing
+      navigate("/login");
     }
-  }, []);
+  }, [token, navigate]);
 
   const handleLogout = async () => {
     try {
@@ -62,6 +57,8 @@ export function AppLayout() {
     localStorage.removeItem("codeguardian_user");
     navigate("/");
   };
+
+  if (!token) return null;
 
   return (
     <div
