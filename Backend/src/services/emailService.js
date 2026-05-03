@@ -1,37 +1,15 @@
 const nodemailer = require("nodemailer");
 
-// Support both Brevo SMTP and Gmail
-function createTransporter() {
-  // Gmail (if GMAIL_USER and GMAIL_APP_PASSWORD set)
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
-  }
-  // Brevo SMTP (default)
-  return nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.BREVO_SMTP_USER,
-      pass: process.env.BREVO_SMTP_KEY,
-    },
-  });
-}
+// Gmail only
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
-const transporter = createTransporter();
-
-const FROM = `"CodeGuardian AI" <${
-  process.env.EMAIL_FROM ||
-  process.env.GMAIL_USER ||
-  process.env.BREVO_SMTP_USER ||
-  "noreply@codeguardian.ai"
-}>`;
+const FROM = `"CodeGuardian AI" <${process.env.GMAIL_USER || "noreply@codeguardian.ai"}>`;
 
 // ─── OTP EMAIL ───────────────────────────────────────────────────────────────
 
