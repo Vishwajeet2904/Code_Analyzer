@@ -86,25 +86,57 @@ router.post("/login", authLimiter, validate(loginSchema), async (req, res) => {
   }
 });
 
-// ─── REGISTER (Direct — no OTP required) ────────────────────────────────────
+// ─── REGISTER (Step 1: Send OTP) ─────────────────────────────────────────────
 
-router.post("/register", validate(registerSchema), async (req, res) => {
+router.post("/register", otpLimiter, validate(registerSchema), async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
     const existing = await findUserByEmail(email);
     if (existing) return res.status(409).json({ error: "Email already registered" });
 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hashed = await bcrypt.hash(password, 12);
-    const avatar = name.slice(0, 2).toUpperCase();
 
-    const user = await createUser({
+    pendingUsers[email] = {
       name,
+      hashedPassword: hashed,
+      otp,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+
+    await sendOtpEmail(email, name, otp);
+    res.json({ message: "OTP sent to your email", email });
+  } catch (err) {
+    delete pendingUsers[email];
+    console.error("Register error:", err.message);
+    res.status(500).json({ error: "Failed to send OTP. Please try again." });
+  }
+});
+
+// ─── VERIFY OTP (Step 2: Complete Registration) ───────────────────────────────
+
+router.post("/verify-otp", validate(verifyOtpSchema), async (req, res) => {
+  const { email, otp } = req.body;
+
+  const pending = pendingUsers[email];
+  if (!pending) return res.status(400).json({ error: "No pending registration for this email" });
+  if (Date.now() > pending.expiresAt) {
+    delete pendingUsers[email];
+    return res.status(400).json({ error: "OTP expired. Please register again." });
+  }
+  if (pending.otp !== otp.trim()) return res.status(400).json({ error: "Invalid OTP" });
+
+  try {
+    const avatar = pending.name.slice(0, 2).toUpperCase();
+    const user = await createUser({
+      name: pending.name,
       email,
-      password: hashed,
+      password: pending.hashedPassword,
       avatar,
       plan: "Free",
     });
+    delete pendingUsers[email];
 
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
@@ -121,23 +153,8 @@ router.post("/register", validate(registerSchema), async (req, res) => {
 
     res.json({ token: accessToken, user: safeUser(user) });
   } catch (err) {
-    console.error("Register error:", err.message);
+    console.error("Verify OTP error:", err.message);
     res.status(500).json({ error: "Registration failed. Please try again." });
-  }
-});
-
-// ─── VERIFY OTP (kept for compatibility — auto-approves) ─────────────────────
-
-router.post("/verify-otp", validate(verifyOtpSchema), async (req, res) => {
-  const { email } = req.body;
-  // OTP step removed — just return success if user exists
-  try {
-    const user = await findUserByEmail(email);
-    if (!user) return res.status(400).json({ error: "User not found" });
-    const accessToken = signAccessToken(user);
-    res.json({ token: accessToken, user: safeUser(user) });
-  } catch (err) {
-    res.status(500).json({ error: "Verification failed" });
   }
 });
 
