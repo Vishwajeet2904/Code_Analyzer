@@ -20,7 +20,11 @@ function useCountUp(target: number, duration = 800) {
   return display;
 }
 
-const SAMPLE_CODE = `const express = require('express');
+const SAMPLE_CODE = `// 🛡️ Demo Code — This is a sample with intentional vulnerabilities.
+// You can paste your own code, upload a file, or import from GitHub.
+// Click "Run AI Review" to analyze any code for security issues.
+
+const express = require('express');
 const app = express();
 const db = require('./database');
 
