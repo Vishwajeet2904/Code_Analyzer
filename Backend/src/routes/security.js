@@ -1,103 +1,130 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
-const { scans } = require("../store");
+const { getAllUserScans } = require("../services/dataService");
 
 const router = express.Router();
 
-router.get("/", authMiddleware, (req, res) => {
-  const userScans = scans.filter((s) => s.userId === req.user.id);
+router.get("/", authMiddleware, async (req, res) => {
+  try {
+    const userScans = await getAllUserScans(req.user.id);
 
-  // Aggregate severity counts from all scans
-  let critical = 0, high = 0, medium = 0, low = 0;
-  userScans.forEach((s) => {
-    if (s.fullResult && s.fullResult.issues) {
-      s.fullResult.issues.forEach((issue) => {
-        if (issue.severity === "critical") critical++;
-        else if (issue.severity === "high") high++;
-        else if (issue.severity === "medium") medium++;
-        else low++;
-      });
-    } else {
-      critical += Math.floor(s.issues * 0.1);
-      high += Math.floor(s.issues * 0.25);
-      medium += Math.floor(s.issues * 0.4);
-      low += Math.floor(s.issues * 0.25);
-    }
-  });
+    // Aggregate severity counts from all real scan data
+    let critical = 0, high = 0, medium = 0, low = 0;
+    const realVulns = [];
 
-  if (critical + high + medium + low === 0) {
-    critical = 8; high = 23; medium = 41; low = 71;
-  }
+    const sevColors = { critical: "#ef4444", high: "#f97316", medium: "#f59e0b", low: "#22c55e" };
+    const cvssMap = { critical: "9.8", high: "7.5", medium: "5.4", low: "3.1" };
+    const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
 
-  // Build vulnList from real scan issues
-  const sevColors = { critical: "#ef4444", high: "#f97316", medium: "#f59e0b", low: "#22c55e" };
-  const cvssMap = { critical: "9.8", high: "7.5", medium: "5.4", low: "3.1" };
-  const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    userScans.forEach((s) => {
+      const scanIssues = s.fullResult?.issues || [];
+      if (scanIssues.length > 0) {
+        scanIssues.forEach((issue, idx) => {
+          const sev = (issue.severity || "low").toLowerCase();
+          if (sev === "critical") critical++;
+          else if (sev === "high") high++;
+          else if (sev === "medium") medium++;
+          else low++;
 
-  let realVulns = [];
-  userScans.forEach((s) => {
-    if (s.fullResult && s.fullResult.issues) {
-      s.fullResult.issues.forEach((issue, idx) => {
-        const sev = (issue.severity || "low").toLowerCase();
-        realVulns.push({
-          id: `CGI-${s.id.slice(-4).toUpperCase()}-${String(idx + 1).padStart(3, "0")}`,
-          name: issue.title || "Unknown Issue",
-          file: s.repo || "unknown",
-          sev: sev.toUpperCase(),
-          color: sevColors[sev] || "#22c55e",
-          cvss: cvssMap[sev] || "3.1",
+          const scanId = s._id ? s._id.toString() : s.id;
+          realVulns.push({
+            id: `CGI-${scanId.slice(-4).toUpperCase()}-${String(idx + 1).padStart(3, "0")}`,
+            name: issue.title || "Unknown Issue",
+            file: s.repo || "unknown",
+            sev: sev.toUpperCase(),
+            color: sevColors[sev] || "#22c55e",
+            cvss: cvssMap[sev] || "3.1",
+          });
         });
-      });
+      } else {
+        // Fallback estimate from issue count
+        critical += Math.floor((s.issues || 0) * 0.1);
+        high += Math.floor((s.issues || 0) * 0.25);
+        medium += Math.floor((s.issues || 0) * 0.4);
+        low += Math.floor((s.issues || 0) * 0.25);
+      }
+    });
+
+    // If no real data, keep zeros — don't show fake numbers
+    const hasRealData = critical + high + medium + low > 0;
+
+    // Sort and limit vuln list — empty array if no real data
+    realVulns.sort((a, b) => (sevOrder[a.sev.toLowerCase()] ?? 3) - (sevOrder[b.sev.toLowerCase()] ?? 3));
+    const vulnList = realVulns.slice(0, 8);
+
+    // Build trend data from real scans (last 6 months + current)
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const now = new Date();
+    const trendData = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
+      return { month: months[d.getMonth()], critical: 0, high: 0, medium: 0, low: 0 };
+    });
+
+    userScans.forEach((s) => {
+      const scanDate = new Date(s.createdAt || s.time);
+      const monthIdx = trendData.findIndex(
+        (t) => t.month === months[scanDate.getMonth()]
+      );
+      if (monthIdx !== -1 && s.fullResult?.issues) {
+        s.fullResult.issues.forEach((issue) => {
+          const sev = (issue.severity || "low").toLowerCase();
+          if (trendData[monthIdx][sev] !== undefined) trendData[monthIdx][sev]++;
+        });
+      }
+    });
+
+    // Fill last entry with current totals
+    if (hasRealData) {
+      trendData[6] = { ...trendData[6], critical, high, medium, low };
     }
-  });
 
-  realVulns.sort((a, b) => (sevOrder[a.sev.toLowerCase()] || 3) - (sevOrder[b.sev.toLowerCase()] || 3));
-  realVulns = realVulns.slice(0, 8);
+    // Build real heatmap from actual scan repos
+    const repoNames = [...new Set(userScans.map(s => s.repo || "unknown"))].slice(0, 7);
+    const heatmapData = repoNames.length > 0
+      ? repoNames.map((repo) => {
+          const repoScans = userScans.filter(s => s.repo === repo);
+          const row = [repo];
+          for (let w = 0; w < 8; w++) {
+            const scan = repoScans[w];
+            row.push(scan ? (scan.issues || 0) : 0);
+          }
+          return row;
+        })
+      : [
+          ["auth.js",    9, 2, 5, 1, 0, 3, 0, 7],
+          ["api.js",     0, 4, 8, 0, 2, 0, 1, 3],
+          ["db.js",      6, 0, 0, 3, 7, 0, 4, 0],
+          ["user.js",    1, 5, 0, 8, 0, 2, 0, 5],
+          ["payment.js", 3, 0, 1, 0, 4, 6, 0, 2],
+          ["config.js",  8, 1, 0, 2, 0, 5, 3, 0],
+          ["routes.js",  0, 6, 3, 0, 1, 0, 7, 4],
+        ];
 
-  const vulnList = realVulns.length > 0 ? realVulns : [
-    { id: "CGI-2024-001", name: "SQL Injection", file: "auth.js", sev: "CRITICAL", color: "#ef4444", cvss: "9.8" },
-    { id: "CGI-2024-002", name: "Broken Auth", file: "user.js", sev: "CRITICAL", color: "#ef4444", cvss: "9.1" },
-    { id: "CGI-2024-003", name: "Hardcoded Secret", file: "config.js", sev: "HIGH", color: "#f97316", cvss: "7.5" },
-    { id: "CGI-2024-004", name: "XSS Reflected", file: "routes.js", sev: "HIGH", color: "#f97316", cvss: "7.2" },
-    { id: "CGI-2024-005", name: "Missing CSRF", file: "api.js", sev: "MEDIUM", color: "#f59e0b", cvss: "5.4" },
-    { id: "CGI-2024-006", name: "Info Disclosure", file: "payment.js", sev: "LOW", color: "#22c55e", cvss: "3.1" },
-  ];
-
-  res.json({
-    severityData: [
-      { name: "Critical", value: critical, color: "#ef4444" },
-      { name: "High", value: high, color: "#f97316" },
-      { name: "Medium", value: medium, color: "#f59e0b" },
-      { name: "Low", value: low, color: "#22c55e" },
-    ],
-    trendData: [
-      { month: "Sep", critical: 18, high: 42, medium: 68, low: 90 },
-      { month: "Oct", critical: 15, high: 38, medium: 62, low: 85 },
-      { month: "Nov", critical: 14, high: 35, medium: 58, low: 81 },
-      { month: "Dec", critical: 12, high: 30, medium: 52, low: 78 },
-      { month: "Jan", critical: 10, high: 27, medium: 46, low: 74 },
-      { month: "Feb", critical: 9, high: 25, medium: 43, low: 72 },
-      { month: "Mar", critical, high, medium, low },
-    ],
-    radarData: [
-      { subject: "Injection", A: 85 },
-      { subject: "Auth", A: 62 },
-      { subject: "Exposure", A: 78 },
-      { subject: "XSS", A: 90 },
-      { subject: "CSRF", A: 55 },
-      { subject: "Config", A: 70 },
-    ],
-    heatmapData: [
-      ["auth.js", 9, 2, 5, 1, 0, 3, 0, 7],
-      ["api.js", 0, 4, 8, 0, 2, 0, 1, 3],
-      ["db.js", 6, 0, 0, 3, 7, 0, 4, 0],
-      ["user.js", 1, 5, 0, 8, 0, 2, 0, 5],
-      ["payment.js", 3, 0, 1, 0, 4, 6, 0, 2],
-      ["config.js", 8, 1, 0, 2, 0, 5, 3, 0],
-      ["routes.js", 0, 6, 3, 0, 1, 0, 7, 4],
-    ],
-    vulnList,
-  });
+    res.json({
+      severityData: [
+        { name: "Critical", value: critical, color: "#ef4444" },
+        { name: "High", value: high, color: "#f97316" },
+        { name: "Medium", value: medium, color: "#f59e0b" },
+        { name: "Low", value: low, color: "#22c55e" },
+      ],
+      trendData,
+      radarData: [
+        { subject: "Injection", A: Math.max(10, 100 - critical * 5) },
+        { subject: "Auth",      A: Math.max(10, 100 - high * 3) },
+        { subject: "Exposure",  A: Math.max(10, 100 - medium * 2) },
+        { subject: "XSS",       A: Math.max(10, 90 - high * 2) },
+        { subject: "CSRF",      A: Math.max(10, 85 - medium * 2) },
+        { subject: "Config",    A: Math.max(10, 95 - low) },
+      ],
+      heatmapData,
+      vulnList,
+      // Use scan count (not issue count) so "0 issues" scans still show data
+      stats: { critical, high, medium, low, total: critical + high + medium + low, scanCount: userScans.length },
+    });
+  } catch (err) {
+    console.error("Security insights error:", err.message);
+    res.status(500).json({ error: "Failed to load security insights" });
+  }
 });
 
 module.exports = router;

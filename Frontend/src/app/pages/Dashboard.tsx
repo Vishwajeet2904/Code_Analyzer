@@ -38,22 +38,6 @@ const qualityTrendData = [
   { month: "Mar", score: 94, security: 91 },
 ];
 
-const recentScans = [
-  { repo: "api-service", branch: "main", score: 94, issues: 2, time: "2m ago", status: "pass", lang: "Node.js" },
-  { repo: "auth-module", branch: "feat/oauth", score: 71, issues: 8, time: "1h ago", status: "warn", lang: "TypeScript" },
-  { repo: "payments-api", branch: "main", score: 88, issues: 4, time: "3h ago", status: "pass", lang: "Python" },
-  { repo: "user-service", branch: "fix/xss", score: 56, issues: 15, time: "5h ago", status: "fail", lang: "Java" },
-  { repo: "frontend-app", branch: "dev", score: 82, issues: 6, time: "1d ago", status: "pass", lang: "React" },
-];
-
-const projects = [
-  { name: "api-service", score: 94, issues: 2, color: "#22c55e" },
-  { name: "auth-module", score: 71, issues: 8, color: "#f59e0b" },
-  { name: "payments-api", score: 88, issues: 4, color: "#22c55e" },
-  { name: "user-service", score: 56, issues: 15, color: "#ef4444" },
-  { name: "frontend-app", score: 82, issues: 6, color: "#22c55e" },
-];
-
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -80,17 +64,23 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const [dashboardData, setDashboardData] = useState({
+  const [dashboardData, setDashboardData] = useState<{
+    overview: { totalScans: string; vulnerabilitiesFound: string; resolvedIssues: string; qualityScore: string };
+    qualityTrend: any[];
+    recentScans: any[];
+    projects: any[];
+    lastScanTime: string | null;
+  }>({
     overview: {
       totalScans: "0",
       vulnerabilitiesFound: "0",
       resolvedIssues: "0",
-      qualityScore: "0/100"
+      qualityScore: "0/100",
     },
     qualityTrend: qualityTrendData,
-    recentScans: recentScans,
-    projects: projects,
-    lastScanTime: null as string | null,
+    recentScans: [],
+    projects: [],
+    lastScanTime: null,
   });
   const [lastUpdated, setLastUpdated] = useState<string>("Never");
 
@@ -298,64 +288,72 @@ export function Dashboard() {
               View all →
             </button>
           </div>
-          <div className="space-y-2">
-            {dashboardData.recentScans.map(({ repo, branch, score, issues, time, status, lang }) => (
-              <div
-                key={repo + branch}
-                className="flex items-center gap-4 p-3 rounded-xl transition-all hover:bg-white/5 cursor-pointer"
+          {dashboardData.recentScans.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Code2 size={32} style={{ color: "#1e1e3f" }} />
+              <p style={{ fontSize: "13px", color: "#4b5563", textAlign: "center" }}>
+                No scans yet. Run your first AI code review!
+              </p>
+              <button
                 onClick={() => navigate("/app/review")}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-white"
+                style={{ background: "linear-gradient(135deg, #6366f1, #22d3ee)", fontWeight: 600 }}
               >
+                <Zap size={13} /> Quick Scan
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dashboardData.recentScans.map(({ repo, branch, score, issues, time, status, lang }, idx) => (
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs"
-                  style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}
+                  key={`${repo}-${branch}-${idx}`}
+                  className="flex items-center gap-4 p-3 rounded-xl transition-all hover:bg-white/5 cursor-pointer"
+                  onClick={() => navigate("/app/review")}
                 >
-                  {lang.slice(0, 2)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: "14px", fontWeight: 600, color: "#f9fafb" }}>{repo}</span>
-                    <span
-                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-                      style={{ background: "rgba(255,255,255,0.06)", color: "#6b7280" }}
-                    >
-                      <GitBranch size={10} />
-                      {branch}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span style={{ fontSize: "12px", color: "#6b7280" }}>{lang}</span>
-                    <span style={{ fontSize: "12px", color: "#4b5563" }}>·</span>
-                    <span style={{ fontSize: "12px", color: "#6b7280" }}>{issues} issues</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
                   <div
-                    className="text-sm px-3 py-1 rounded-lg"
-                    style={{
-                      fontWeight: 700,
-                      color: score >= 80 ? "#22c55e" : score >= 65 ? "#f59e0b" : "#ef4444",
-                      background:
-                        score >= 80
-                          ? "rgba(34,197,94,0.1)"
-                          : score >= 65
-                          ? "rgba(245,158,11,0.1)"
-                          : "rgba(239,68,68,0.1)",
-                    }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs"
+                    style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}
                   >
-                    {score}
+                    {lang.slice(0, 2)}
                   </div>
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{
-                      background:
-                        status === "pass" ? "#22c55e" : status === "warn" ? "#f59e0b" : "#ef4444",
-                    }}
-                  />
-                  <span style={{ fontSize: "12px", color: "#4b5563" }}>{time}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: "14px", fontWeight: 600, color: "#f9fafb" }}>{repo}</span>
+                      <span
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "#6b7280" }}
+                      >
+                        <GitBranch size={10} />
+                        {branch}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span style={{ fontSize: "12px", color: "#6b7280" }}>{lang}</span>
+                      <span style={{ fontSize: "12px", color: "#4b5563" }}>·</span>
+                      <span style={{ fontSize: "12px", color: "#6b7280" }}>{issues} issues</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="text-sm px-3 py-1 rounded-lg"
+                      style={{
+                        fontWeight: 700,
+                        color: score >= 80 ? "#22c55e" : score >= 65 ? "#f59e0b" : "#ef4444",
+                        background: score >= 80 ? "rgba(34,197,94,0.1)" : score >= 65 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)",
+                      }}
+                    >
+                      {score}
+                    </div>
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ background: status === "pass" ? "#22c55e" : status === "warn" ? "#f59e0b" : "#ef4444" }}
+                    />
+                    <span style={{ fontSize: "12px", color: "#4b5563" }}>{time}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Project Health */}
@@ -402,8 +400,14 @@ export function Dashboard() {
               <span style={{ fontSize: "12px", fontWeight: 600, color: "#a5b4fc" }}>AI Insight</span>
             </div>
             <p style={{ fontSize: "12px", color: "#9ca3af", lineHeight: 1.6 }}>
-              user-service has 15 unresolved issues. Prioritize auth.js — fixing it will increase
-              overall score by ~18 points.
+              {dashboardData.projects.length > 0
+                ? (() => {
+                    const worst = [...dashboardData.projects].sort((a, b) => a.score - b.score)[0];
+                    return worst
+                      ? `${worst.name} has ${worst.issues} unresolved issue${worst.issues !== 1 ? "s" : ""}. Fixing it could raise your overall score by ~${Math.min(18, Math.round((100 - worst.score) * 0.3))} points.`
+                      : "All projects are looking healthy. Keep shipping secure code!";
+                  })()
+                : "Run your first scan to get personalized AI insights about your codebase."}
             </p>
           </div>
         </div>

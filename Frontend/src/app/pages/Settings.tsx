@@ -36,21 +36,34 @@ const severityColors: Record<string, string> = {
 
 export function Settings() {
   const [darkMode, setDarkMode] = useState(() => {
-    return !document.documentElement.classList.contains("light");
+    // Read from localStorage, default to dark
+    return localStorage.getItem("cg_theme") !== "light";
   });
 
   const toggleDarkMode = (val: boolean) => {
     setDarkMode(val);
+    localStorage.setItem("cg_theme", val ? "dark" : "light");
     if (val) {
-      document.documentElement.classList.remove("light");
-      document.documentElement.classList.add("dark");
+      document.documentElement.classList.remove("light-mode");
       document.documentElement.style.filter = "";
+      document.body.style.background = "#050510";
+      document.body.style.color = "#f9fafb";
     } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");
-      document.documentElement.style.filter = "invert(1) hue-rotate(180deg)";
+      document.documentElement.classList.add("light-mode");
+      // Soft light theme — just brighten backgrounds
+      document.body.style.background = "#f0f2f8";
+      document.body.style.color = "#0f0f1a";
+      document.documentElement.style.filter = "";
     }
   };
+
+  // Apply saved theme on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("cg_theme");
+    if (saved === "light") {
+      toggleDarkMode(false);
+    }
+  }, []);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [autoFix, setAutoFix] = useState(false);
   const [prComments, setPrComments] = useState(true);

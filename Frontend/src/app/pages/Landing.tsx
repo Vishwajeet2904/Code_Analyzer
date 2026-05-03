@@ -178,7 +178,7 @@ export function Landing() {
               }}
             >
               <Sparkles size={12} />
-              <span style={{ fontWeight: 600 }}>Powered by GPT-4 + Custom Security Models</span>
+              <span style={{ fontWeight: 600 }}>Powered by Groq LLaMA 3.3 · 200+ Vulnerability Patterns</span>
             </div>
           </div>
 

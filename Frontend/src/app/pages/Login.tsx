@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Shield, Github, Chrome, Mail, Lock, Eye, EyeOff, ArrowLeft, Zap } from "lucide-react";
 
+const API = "http://localhost:5000";
+
 export function Login() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -22,7 +24,7 @@ export function Login() {
 
     if (mode === "signup") {
       try {
-        const res = await fetch("http://localhost:5000/api/auth/register", {
+        const res = await fetch(`${API}/api/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, email, password }),
@@ -43,7 +45,7 @@ export function Login() {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const res = await fetch(`${API}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -68,7 +70,7 @@ export function Login() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/auth/verify-otp", {
+      const res = await fetch(`${API}/api/auth/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: pendingEmail, otp }),
@@ -89,7 +91,7 @@ export function Login() {
   };
 
   const handleOAuth = async (provider: string) => {
-    const res = await fetch("http://localhost:5000/api/auth/oauth", {
+    const res = await fetch(`${API}/api/auth/oauth`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider }),
@@ -216,15 +218,19 @@ export function Login() {
             </form>
           ) : (
             <>
-              {/* Social auth */}
+              {/* Social auth — Demo mode */}
               <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span style={{ fontSize: "11px", color: "#4b5563" }}>Quick access</span>
+                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.25)", fontSize: "10px", fontWeight: 700 }}>DEMO</span>
+                </div>
                 <button
                   onClick={() => handleOAuth("GitHub")}
                   className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm transition-all hover:bg-white/10"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#e5e7eb", fontWeight: 500 }}
                 >
                   <Github size={18} />
-                  Continue with GitHub
+                  Demo Login via GitHub
                 </button>
                 <button
                   onClick={() => handleOAuth("Google")}
@@ -232,7 +238,7 @@ export function Login() {
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#e5e7eb", fontWeight: 500 }}
                 >
                   <Chrome size={18} />
-                  Continue with Google
+                  Demo Login via Google
                 </button>
               </div>
 
@@ -283,7 +289,13 @@ export function Login() {
                   <div className="flex items-center justify-between">
                     <label style={{ fontSize: "13px", color: "#9ca3af", fontWeight: 500 }}>Password</label>
                     {mode === "login" && (
-                      <a href="#" style={{ fontSize: "12px", color: "#6366f1" }}>Forgot password?</a>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/forgot-password")}
+                        style={{ fontSize: "12px", color: "#6366f1", background: "none", border: "none", cursor: "pointer" }}
+                      >
+                        Forgot password?
+                      </button>
                     )}
                   </div>
                   <div className="relative mt-1.5">

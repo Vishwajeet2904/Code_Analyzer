@@ -1,6 +1,23 @@
-import { useState, useRef, useEffect } from "react";
-import { Zap, Upload, ChevronDown, AlertTriangle, Wind, CheckCircle, Sparkles, X, Shield, ArrowRight, RotateCcw, FileCode, Github, Folder, FileText } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Zap, Upload, ChevronDown, AlertTriangle, Wind, CheckCircle, Sparkles, X, Shield, ArrowRight, RotateCcw, FileCode, Github, Folder, FileText, Keyboard, Award } from "lucide-react";
 import Editor, { DiffEditor, useMonaco } from "@monaco-editor/react";
+
+// ── Animated counter hook ─────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 800) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    if (target === 0) { setDisplay(0); return; }
+    let start = 0;
+    const step = Math.ceil(target / (duration / 16));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= target) { setDisplay(target); clearInterval(timer); }
+      else setDisplay(start);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return display;
+}
 
 const SAMPLE_CODE = `const express = require('express');
 const app = express();
@@ -83,6 +100,16 @@ export function CodeReview() {
   const [baseCode, setBaseCode] = useState(SAMPLE_CODE);
   const [autoFixSetting, setAutoFixSetting] = useState(false);
   const [prCommentPosted, setPrCommentPosted] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Animated quality score
+  const animatedScore = useCountUp(analyzed && scanResult ? scanResult.qualityScore : 0);
+
+  // Ask AI chat state — per issue
+  const [askAiIssueId, setAskAiIssueId] = useState<string | null>(null);
+  const [askAiInput, setAskAiInput] = useState("");
+  const [askAiMessages, setAskAiMessages] = useState<Record<string, { role: "user" | "ai"; text: string }[]>>({});
+  const [askAiLoading, setAskAiLoading] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumRef = useRef<HTMLDivElement>(null);
@@ -123,30 +150,46 @@ export function CodeReview() {
     setGithubLoading(true);
     setGithubError("");
     try {
-      let cleanRepo = repoStr.replace("https://github.com/", "").replace(/\/$/, "");
-      const repoParts = cleanRepo.split("/");
-      
+      let cleanRepo = repoStr.replace("https://github.com/", "").replace(/\/$/, "").trim();
+      const repoParts = cleanRepo.split("/").filter(Boolean);
+
       if (repoParts.length === 1) {
-        const res = await fetch(`https://api.github.com/users/${cleanRepo}/repos?per_page=100&sort=updated`);
-        if (!res.ok) throw new Error("GitHub user not found or API rate limit exceeded.");
+        // Just a username — list their repos
+        const username = repoParts[0];
+        const res = await fetch(
+          `https://api.github.com/users/${username}/repos?per_page=100&sort=updated`,
+          { headers: { "Accept": "application/vnd.github+json", "User-Agent": "CodeGuardian-App" } }
+        );
+        if (res.status === 404) throw new Error(`GitHub user "${username}" not found.`);
+        if (res.status === 403) throw new Error("GitHub API rate limit exceeded. Try again in a minute.");
+        if (!res.ok) throw new Error(`GitHub error: ${res.status}`);
         const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) throw new Error("No public repositories found for this user.");
         setGithubFiles(data.map((r: any) => ({ name: r.name, path: r.name, type: "repo", full_name: r.full_name })));
-        setGithubRepoUrl(cleanRepo);
+        setGithubRepoUrl(username);
         setGithubCurrentPath("");
       } else if (repoParts.length >= 2) {
         cleanRepo = repoParts.slice(0, 2).join("/");
-        const res = await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${path}`);
-        if (!res.ok) throw new Error("Repository not found or API rate limit exceeded.");
+        const apiPath = path ? `/${path}` : "";
+        const res = await fetch(
+          `https://api.github.com/repos/${cleanRepo}/contents${apiPath}`,
+          { headers: { "Accept": "application/vnd.github+json", "User-Agent": "CodeGuardian-App" } }
+        );
+        if (res.status === 404) throw new Error(`Repository "${cleanRepo}" not found or is private.`);
+        if (res.status === 403) throw new Error("GitHub API rate limit exceeded. Try again in a minute.");
+        if (!res.ok) throw new Error(`GitHub error: ${res.status}`);
         const data = await res.json();
         if (Array.isArray(data)) {
-          setGithubFiles(data.sort((a,b) => a.type === 'dir' ? -1 : 1));
+          setGithubFiles(data.sort((a: any, b: any) => (a.type === "dir" ? -1 : 1)));
           setGithubRepoUrl(cleanRepo);
           setGithubCurrentPath(path);
-        } else if (data.type === 'file') {
+        } else if (data.type === "file") {
           handleGithubFileSelect(data);
         }
+      } else {
+        throw new Error("Enter a GitHub username or repo URL (e.g. facebook/react)");
       }
-    } catch(e: any) {
+    } catch (e: any) {
       setGithubError(e.message);
     } finally {
       setGithubLoading(false);
@@ -217,6 +260,31 @@ export function CodeReview() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ctrl+Enter → Run analysis
+      if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        if (!isAnalyzing) handleRunAnalysis();
+      }
+      // Ctrl+Shift+F → Fix all
+      if (e.ctrlKey && e.shiftKey && e.key === "F") {
+        e.preventDefault();
+        if (analyzed && issues.length > 0 && !isFixingAll) handleFixAll();
+      }
+      // Escape → close modals
+      if (e.key === "Escape") {
+        setShowComparison(false);
+        setShowExploit(false);
+        setShowGithubModal(false);
+        setShowShortcuts(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isAnalyzing, analyzed, issues, isFixingAll]);
 
   // Validate that refactoredCode looks like real code, not a JSON object
   const isValidCodeFix = (fixedCode: string, origCode: string): boolean => {
@@ -304,12 +372,14 @@ export function CodeReview() {
   const handleGetFix = async (issue: any) => {
     setLoadingFix(true);
     setFixDetail(null);
+    // Use originalCode if set, otherwise fall back to current code
+    const codeToFix = originalCode && originalCode.trim().length > 0 ? originalCode : code;
     try {
       const token = localStorage.getItem("codeguardian_token") || "";
       const resp = await fetch("http://localhost:5000/api/review/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code: originalCode, issue, language: selectedLang }),
+        body: JSON.stringify({ code: codeToFix, issue, language: selectedLang }),
       });
       const data = await resp.json();
       const sanitized = { ...data };
@@ -371,6 +441,81 @@ export function CodeReview() {
     e.target.value = "";
   };
 
+  const handleAskAi = async (issue: any, question: string) => {
+    if (!question.trim() || askAiLoading) return;
+    const issueId = issue.id || issue.title;
+    const userMsg = { role: "user" as const, text: question };
+    setAskAiMessages(prev => ({ ...prev, [issueId]: [...(prev[issueId] || []), userMsg] }));
+    setAskAiInput("");
+    setAskAiLoading(true);
+    try {
+      const token = localStorage.getItem("codeguardian_token") || "";
+      const resp = await fetch("http://localhost:5000/api/review/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          code,
+          language: selectedLang,
+          issue: {
+            ...issue,
+            description: `User question: "${question}"\n\nOriginal issue: ${issue.description}`,
+          },
+        }),
+      });
+      const data = await resp.json();
+      const answer = safeStr(data.explanation || data.prevention || data.attackVector || "I couldn't generate a response. Please try again.");
+      setAskAiMessages(prev => ({
+        ...prev,
+        [issueId]: [...(prev[issueId] || []), { role: "ai", text: answer }],
+      }));
+    } catch {
+      setAskAiMessages(prev => ({
+        ...prev,
+        [issueId]: [...(prev[issueId] || []), { role: "ai", text: "Failed to connect. Make sure the backend is running." }],
+      }));
+    }
+    setAskAiLoading(false);
+  };
+
+  const downloadSecurityBadge = () => {
+    if (!scanResult) return;
+    const score = scanResult.qualityScore;
+    const passed = score >= 70;
+    const color = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
+    const label = score >= 80 ? "SECURED" : score >= 60 ? "REVIEWED" : "NEEDS WORK";
+    const date = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="280" height="80">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d0d23"/>
+      <stop offset="100%" style="stop-color:#07071a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="80" rx="12" fill="url(#bg)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <rect x="0" y="0" width="4" height="80" rx="2" fill="url(#accent)"/>
+  <text x="20" y="22" font-family="Inter,sans-serif" font-size="10" font-weight="700" fill="#6b7280" letter-spacing="1.5">CODEGUARDIAN AI</text>
+  <text x="20" y="46" font-family="Inter,sans-serif" font-size="22" font-weight="800" fill="${color}">${score}/100</text>
+  <text x="20" y="64" font-family="Inter,sans-serif" font-size="11" font-weight="600" fill="${color}">${label}</text>
+  <text x="260" y="64" font-family="Inter,sans-serif" font-size="10" fill="#4b5563" text-anchor="end">${date}</text>
+  <text x="260" y="46" font-family="Inter,sans-serif" font-size="10" fill="#374151" text-anchor="end">${repoName}</text>
+  ${passed ? `<circle cx="248" cy="20" r="12" fill="rgba(34,197,94,0.15)" stroke="${color}" stroke-width="1.5"/>
+  <text x="248" y="25" font-family="Inter,sans-serif" font-size="14" text-anchor="middle" fill="${color}">✓</text>` : ""}
+</svg>`;
+
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `codeguardian-badge-${repoName}-${score}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filteredIssues = issues.filter((i) => {
     if (activeTab === "all") return true;
     if (activeTab === "smell") return i.type === "smell" || i.type === "code_smell";
@@ -389,7 +534,7 @@ export function CodeReview() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b flex-wrap gap-y-2 flex-shrink-0"
+        <div className="relative flex items-center gap-2 px-4 py-3 border-b flex-wrap gap-y-2 flex-shrink-0"
           style={{ background: "rgba(13,13,35,0.95)", borderColor: "rgba(255,255,255,0.07)" }}>
 
           {/* Repo name */}
@@ -460,14 +605,44 @@ export function CodeReview() {
           {/* Run button */}
           <button onClick={handleRunAnalysis} disabled={isAnalyzing}
             className="flex items-center gap-2 px-5 py-1.5 rounded-lg text-sm text-white transition-all hover:opacity-90 ml-auto"
-            style={{ background: isAnalyzing ? "rgba(99,102,241,0.5)" : "linear-gradient(135deg, #6366f1, #22d3ee)", fontWeight: 600, boxShadow: "0 0 20px rgba(99,102,241,0.3)" }}>
+            style={{ background: isAnalyzing ? "rgba(99,102,241,0.5)" : "linear-gradient(135deg, #6366f1, #22d3ee)", fontWeight: 600, boxShadow: "0 0 20px rgba(99,102,241,0.3)" }}
+            title="Run AI Review (Ctrl+Enter)">
             {isAnalyzing
               ? <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Analyzing…</>
               : <><Zap size={13} />Run AI Review</>}
           </button>
+
+          {/* Keyboard shortcuts hint */}
+          <button
+            onClick={() => setShowShortcuts(v => !v)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-all hover:bg-white/10"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "#4b5563" }}
+            title="Keyboard shortcuts">
+            <Keyboard size={12} />
+          </button>
         </div>
 
-        {/* Code Editor */}
+        {/* Shortcuts tooltip */}
+        {showShortcuts && (
+          <div className="absolute top-14 right-4 z-50 rounded-xl p-3 space-y-1.5 shadow-2xl"
+            style={{ background: "#0d0d23", border: "1px solid rgba(255,255,255,0.12)", minWidth: "220px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+              Keyboard Shortcuts
+            </div>
+            {[
+              { keys: "Ctrl + Enter", action: "Run AI Review" },
+              { keys: "Ctrl + Shift + F", action: "Fix All Issues" },
+              { keys: "Escape", action: "Close modals" },
+            ].map(({ keys, action }) => (
+              <div key={keys} className="flex items-center justify-between gap-4">
+                <span style={{ fontSize: "11px", color: "#9ca3af" }}>{action}</span>
+                <kbd style={{ fontSize: "10px", color: "#a5b4fc", background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "4px", padding: "1px 6px", fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>
+                  {keys}
+                </kbd>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex-1 overflow-hidden relative">
           {isDiffMode ? (
             <DiffEditor
@@ -518,7 +693,7 @@ export function CodeReview() {
               <>
                 <span style={{ fontSize: "12px", color: "#6b7280" }}>Quality Score</span>
                 <span style={{ fontSize: "14px", fontWeight: 700, color: scanResult.qualityScore >= 70 ? "#22c55e" : scanResult.qualityScore >= 50 ? "#f59e0b" : "#ef4444" }}>
-                  {scanResult.qualityScore}/100
+                  {animatedScore}/100
                 </span>
                 <span style={{ fontSize: "12px", color: "#6b7280" }}>·</span>
                 <span style={{ fontSize: "12px", color: "#9ca3af" }}>{issues.length} issues</span>
@@ -533,6 +708,20 @@ export function CodeReview() {
                   </span>
                 )}
                 <span style={{ fontSize: "12px", color: "#4b5563", marginLeft: "auto" }}>{safeStr(scanResult.summary)}</span>
+                {/* Security Badge download */}
+                <button
+                  onClick={downloadSecurityBadge}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all hover:opacity-90 flex-shrink-0"
+                  style={{
+                    background: scanResult.qualityScore >= 70 ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.1)",
+                    border: `1px solid ${scanResult.qualityScore >= 70 ? "rgba(34,197,94,0.3)" : "rgba(245,158,11,0.3)"}`,
+                    color: scanResult.qualityScore >= 70 ? "#22c55e" : "#f59e0b",
+                    fontWeight: 600,
+                  }}
+                  title="Download security badge for your README">
+                  <Award size={11} />
+                  Badge
+                </button>
               </>
             ) : (
               <span style={{ fontSize: "12px", color: "#4b5563" }}>Paste or upload code, then click Run AI Review</span>
@@ -582,6 +771,7 @@ export function CodeReview() {
                 onClick={() => handleFixAll()}
                 disabled={isFixingAll || appliedFixes.size === issues.length}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                title="Fix All Issues (Ctrl+Shift+F)"
                 style={{
                   background: appliedFixes.size === issues.length ? "rgba(34,197,94,0.15)" : "linear-gradient(135deg, #ef4444, #f97316)",
                   color: appliedFixes.size === issues.length ? "#22c55e" : "white",
@@ -763,7 +953,85 @@ export function CodeReview() {
                           style={{ background: "rgba(239,68,68,0.15)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }}>
                           <AlertTriangle size={11} />Exploit
                         </button>
+                        <button
+                          onClick={() => {
+                            const id = issue.id || issue.title;
+                            setAskAiIssueId(askAiIssueId === id ? null : id);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs transition-all hover:opacity-80"
+                          style={{ background: "rgba(168,85,247,0.15)", color: "#d8b4fe", border: "1px solid rgba(168,85,247,0.25)" }}>
+                          <Sparkles size={11} />Ask AI
+                        </button>
                       </div>
+
+                      {/* Ask AI chat panel */}
+                      {askAiIssueId === (issue.id || issue.title) && (
+                        <div className="rounded-xl overflow-hidden"
+                          style={{ border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.05)" }}>
+                          {/* Chat messages */}
+                          <div className="p-2.5 space-y-2 max-h-48 overflow-y-auto">
+                            {/* Suggested questions */}
+                            {!(askAiMessages[issue.id || issue.title]?.length) && (
+                              <div className="space-y-1.5">
+                                <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "6px" }}>Suggested questions:</p>
+                                {[
+                                  "Why is this dangerous in production?",
+                                  "Show me a real CVE for this",
+                                  "How do I test if my code is vulnerable?",
+                                ].map(q => (
+                                  <button key={q} onClick={() => handleAskAi(issue, q)}
+                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-all hover:bg-white/10"
+                                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "#9ca3af" }}>
+                                    {q}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {(askAiMessages[issue.id || issue.title] || []).map((msg, i) => (
+                              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                                <div className="rounded-xl px-3 py-2 max-w-[85%]"
+                                  style={{
+                                    background: msg.role === "user" ? "rgba(99,102,241,0.25)" : "rgba(255,255,255,0.06)",
+                                    border: msg.role === "user" ? "1px solid rgba(99,102,241,0.3)" : "1px solid rgba(255,255,255,0.08)",
+                                    fontSize: "11px",
+                                    color: msg.role === "user" ? "#c7d2fe" : "#d1d5db",
+                                    lineHeight: 1.5,
+                                  }}>
+                                  {msg.text}
+                                </div>
+                              </div>
+                            ))}
+                            {askAiLoading && askAiIssueId === (issue.id || issue.title) && (
+                              <div className="flex justify-start">
+                                <div className="rounded-xl px-3 py-2 flex items-center gap-2"
+                                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                  <div className="w-3 h-3 border-2 rounded-full animate-spin"
+                                    style={{ borderColor: "rgba(168,85,247,0.3)", borderTopColor: "#a855f7" }} />
+                                  <span style={{ fontSize: "11px", color: "#6b7280" }}>Thinking…</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {/* Input */}
+                          <div className="flex gap-1.5 p-2 border-t" style={{ borderColor: "rgba(168,85,247,0.15)" }}>
+                            <input
+                              value={askAiInput}
+                              onChange={e => setAskAiInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAskAi(issue, askAiInput); } }}
+                              placeholder="Ask anything about this issue…"
+                              className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#f9fafb" }}
+                            />
+                            <button
+                              onClick={() => handleAskAi(issue, askAiInput)}
+                              disabled={!askAiInput.trim() || askAiLoading}
+                              className="px-2.5 py-1.5 rounded-lg text-xs transition-all hover:opacity-90"
+                              style={{ background: "linear-gradient(135deg, #a855f7, #6366f1)", color: "white", opacity: !askAiInput.trim() ? 0.5 : 1 }}>
+                              <Sparkles size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

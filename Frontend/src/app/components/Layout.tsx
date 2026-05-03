@@ -39,7 +39,17 @@ export function AppLayout() {
     }
   }, [token, navigate]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("codeguardian_token");
+      await fetch("http://localhost:5000/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+    } catch {
+      // ignore — clear local state regardless
+    }
     localStorage.removeItem("codeguardian_token");
     localStorage.removeItem("codeguardian_user");
     navigate("/");
