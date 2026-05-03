@@ -228,7 +228,7 @@ export function Landing() {
                     avatar: "DU",
                     plan: "Free",
                   }));
-                  navigate("/app");
+                  navigate("/app/review");
                 }}
                 className="flex items-center gap-2 px-8 py-4 rounded-xl transition-all hover:bg-white/10"
                 style={{
