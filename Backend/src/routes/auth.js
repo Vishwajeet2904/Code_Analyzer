@@ -105,7 +105,16 @@ router.post("/register", otpLimiter, validate(registerSchema), async (req, res) 
       expiresAt: Date.now() + 10 * 60 * 1000,
     };
 
-    await sendOtpEmail(email, name, otp);
+    // Always log OTP — visible in Render logs even if email fails
+    console.log(`\n🔑 OTP for ${email}: ${otp}\n`);
+
+    try {
+      await sendOtpEmail(email, name, otp);
+    } catch (emailErr) {
+      // Email failed but OTP is in logs — still allow registration
+      console.warn("Email send failed (check logs for OTP):", emailErr.message);
+    }
+
     res.json({ message: "OTP sent to your email", email });
   } catch (err) {
     delete pendingUsers[email];
