@@ -105,12 +105,27 @@ router.post("/register", otpLimiter, validate(registerSchema), async (req, res) 
       expiresAt: Date.now() + 10 * 60 * 1000,
     };
 
-    await sendOtpEmail(email, name, otp);
-    res.json({ message: "OTP sent to your email", email });
+    console.log(`\n🔑 OTP for ${email}: ${otp}\n`);
+
+    // Try sending email — if it fails, OTP is returned in response for demo
+    let emailSent = false;
+    try {
+      await sendOtpEmail(email, name, otp);
+      emailSent = true;
+    } catch (emailErr) {
+      console.warn("Email failed:", emailErr.message);
+    }
+
+    res.json({
+      message: emailSent ? "OTP sent to your email" : "OTP generated (email unavailable)",
+      email,
+      // Return OTP in dev/demo mode when email fails
+      ...((!emailSent) && { demoOtp: otp }),
+    });
   } catch (err) {
     delete pendingUsers[email];
     console.error("Register error:", err.message);
-    res.status(500).json({ error: "Failed to send OTP. Please try again." });
+    res.status(500).json({ error: "Registration failed. Please try again." });
   }
 });
 
