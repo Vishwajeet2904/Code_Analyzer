@@ -30,12 +30,18 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+    // Allow all Vercel preview deployments + localhost
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith(".vercel.app") ||
+      origin.includes("localhost") ||
+      process.env.NODE_ENV !== "production"
+    ) {
       return callback(null, true);
     }
     callback(new Error(`CORS: Origin ${origin} not allowed`));
   },
-  credentials: true, // allow cookies (refresh token)
+  credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
