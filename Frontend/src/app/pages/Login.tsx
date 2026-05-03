@@ -32,8 +32,10 @@ export function Login() {
         if (!res.ok) {
           setError(data.error || "An error occurred");
         } else {
-          setPendingEmail(email);
-          setOtpStep(true);
+          // Direct login — no OTP step
+          localStorage.setItem("codeguardian_token", data.token);
+          localStorage.setItem("codeguardian_user", JSON.stringify(data.user));
+          navigate("/app");
         }
       } catch {
         setError("Failed to connect to server");
